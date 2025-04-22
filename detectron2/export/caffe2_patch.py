@@ -1,4 +1,4 @@
-# Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
+# Copyright (c) Facebook, Inc. and its affiliates.
 
 import contextlib
 from unittest import mock
@@ -16,14 +16,17 @@ from .c10 import (
     Caffe2MaskRCNNInference,
     Caffe2ROIPooler,
     Caffe2RPN,
+    caffe2_fast_rcnn_outputs_inference,
+    caffe2_keypoint_rcnn_inference,
+    caffe2_mask_rcnn_inference,
 )
 
 
-class GenericMixin(object):
+class GenericMixin:
     pass
 
 
-class Caffe2CompatibleConverter(object):
+class Caffe2CompatibleConverter:
     """
     A GenericUpdater which implements the `create_from` interface, by modifying
     module object and assign it with another class replaceCls.
@@ -112,10 +115,10 @@ def mock_keypoint_rcnn_inference(tensor_mode, patched_module, use_heatmap_max_ke
 
 
 class ROIHeadsPatcher:
-    def __init__(self, cfg, heads):
+    def __init__(self, heads, use_heatmap_max_keypoint):
         self.heads = heads
-
-        self.use_heatmap_max_keypoint = cfg.EXPORT_CAFFE2.USE_HEATMAP_MAX_KEYPOINT
+        self.use_heatmap_max_keypoint = use_heatmap_max_keypoint
+        self.previous_patched = {}
 
     @contextlib.contextmanager
     def mock_roi_heads(self, tensor_mode=True):
@@ -151,3 +154,36 @@ class ROIHeadsPatcher:
             for mgr in mock_ctx_managers:
                 stack.enter_context(mgr)
             yield
+
+    def patch_roi_heads(self, tensor_mode=True):
+        self.previous_patched["box_predictor"] = self.heads.box_predictor.inference
+        self.previous_patched["keypoint_rcnn"] = keypoint_head.keypoint_rcnn_inference
+        self.previous_patched["mask_rcnn"] = mask_head.mask_rcnn_inference
+
+        def patched_fastrcnn_outputs_inference(predictions, proposal):
+            return caffe2_fast_rcnn_outputs_inference(
+                True, self.heads.box_predictor, predictions, proposal
+            )
+
+        self.heads.box_predictor.inference = patched_fastrcnn_outputs_inference
+
+        if getattr(self.heads, "keypoint_on", False):
+
+            def patched_keypoint_rcnn_inference(pred_keypoint_logits, pred_instances):
+                return caffe2_keypoint_rcnn_inference(
+                    self.use_heatmap_max_keypoint, pred_keypoint_logits, pred_instances
+                )
+
+            keypoint_head.keypoint_rcnn_inference = patched_keypoint_rcnn_inference
+
+        if getattr(self.heads, "mask_on", False):
+
+            def patched_mask_rcnn_inference(pred_mask_logits, pred_instances):
+                return caffe2_mask_rcnn_inference(pred_mask_logits, pred_instances)
+
+            mask_head.mask_rcnn_inference = patched_mask_rcnn_inference
+
+    def unpatch_roi_heads(self):
+        self.heads.box_predictor.inference = self.previous_patched["box_predictor"]
+        keypoint_head.keypoint_rcnn_inference = self.previous_patched["keypoint_rcnn"]
+        mask_head.mask_rcnn_inference = self.previous_patched["mask_rcnn"]

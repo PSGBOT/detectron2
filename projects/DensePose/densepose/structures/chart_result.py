@@ -1,7 +1,9 @@
-# Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
+# Copyright (c) Facebook, Inc. and its affiliates.
+
+# pyre-unsafe
 
 from dataclasses import dataclass
-from typing import Tuple
+from typing import Any, Optional, Tuple
 import torch
 
 
@@ -13,7 +15,7 @@ class DensePoseChartResult:
     that has an associated label and is parameterized by two coordinates U and V.
     Both U and V take values in [0, 1].
     Thus the results are represented by two tensors:
-    - labels (tensor [H, W] of uint8): contains estimated label for each pixel of
+    - labels (tensor [H, W] of long): contains estimated label for each pixel of
         the detection bounding box of size (H, W)
     - uv (tensor [2, H, W] of float): contains estimated U and V coordinates
         for each pixel of the detection bounding box of size (H, W)
@@ -21,6 +23,57 @@ class DensePoseChartResult:
 
     labels: torch.Tensor
     uv: torch.Tensor
+
+    def to(self, device: torch.device):
+        """
+        Transfers all tensors to the given device
+        """
+        labels = self.labels.to(device)
+        uv = self.uv.to(device)
+        return DensePoseChartResult(labels=labels, uv=uv)
+
+
+@dataclass
+class DensePoseChartResultWithConfidences:
+    """
+    We add confidence values to DensePoseChartResult
+    Thus the results are represented by two tensors:
+    - labels (tensor [H, W] of long): contains estimated label for each pixel of
+        the detection bounding box of size (H, W)
+    - uv (tensor [2, H, W] of float): contains estimated U and V coordinates
+        for each pixel of the detection bounding box of size (H, W)
+    Plus one [H, W] tensor of float for each confidence type
+    """
+
+    labels: torch.Tensor
+    uv: torch.Tensor
+    sigma_1: Optional[torch.Tensor] = None
+    sigma_2: Optional[torch.Tensor] = None
+    kappa_u: Optional[torch.Tensor] = None
+    kappa_v: Optional[torch.Tensor] = None
+    fine_segm_confidence: Optional[torch.Tensor] = None
+    coarse_segm_confidence: Optional[torch.Tensor] = None
+
+    def to(self, device: torch.device):
+        """
+        Transfers all tensors to the given device, except if their value is None
+        """
+
+        def to_device_if_tensor(var: Any):
+            if isinstance(var, torch.Tensor):
+                return var.to(device)
+            return var
+
+        return DensePoseChartResultWithConfidences(
+            labels=self.labels.to(device),
+            uv=self.uv.to(device),
+            sigma_1=to_device_if_tensor(self.sigma_1),
+            sigma_2=to_device_if_tensor(self.sigma_2),
+            kappa_u=to_device_if_tensor(self.kappa_u),
+            kappa_v=to_device_if_tensor(self.kappa_v),
+            fine_segm_confidence=to_device_if_tensor(self.fine_segm_confidence),
+            coarse_segm_confidence=to_device_if_tensor(self.coarse_segm_confidence),
+        )
 
 
 @dataclass
@@ -40,6 +93,13 @@ class DensePoseChartResultQuantized:
     """
 
     labels_uv_uint8: torch.Tensor
+
+    def to(self, device: torch.device):
+        """
+        Transfers all tensors to the given device
+        """
+        labels_uv_uint8 = self.labels_uv_uint8.to(device)
+        return DensePoseChartResultQuantized(labels_uv_uint8=labels_uv_uint8)
 
 
 @dataclass
@@ -119,7 +179,7 @@ def decompress_compressed_densepose_chart_result(
 
     fstream = BytesIO(base64.decodebytes(result.labels_uv_str.encode()))
     im = Image.open(fstream)
-    labels_uv_uint8_np_chw = np.moveaxis(np.array(im.getdata(), dtype=np.uint8), -1, 0)
+    labels_uv_uint8_np_chw = np.moveaxis(np.array(im, dtype=np.uint8), -1, 0)
     return DensePoseChartResultQuantized(
         labels_uv_uint8=torch.from_numpy(labels_uv_uint8_np_chw.reshape(result.shape_chw))
     )

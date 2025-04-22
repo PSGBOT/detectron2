@@ -1,4 +1,6 @@
-# Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
+# Copyright (c) Facebook, Inc. and its affiliates.
+
+# pyre-unsafe
 
 from typing import Any
 
@@ -15,6 +17,8 @@ class HFlipConverter(BaseConverter):
     dst_type = None
 
     @classmethod
+    # pyre-fixme[14]: `convert` overrides method defined in `BaseConverter`
+    #  inconsistently.
     def convert(cls, predictor_outputs: Any, transform_data: Any, *args, **kwargs):
         """
         Performs an horizontal flip on DensePose predictor outputs.

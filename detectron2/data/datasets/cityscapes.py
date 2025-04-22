@@ -1,4 +1,4 @@
-# Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
+# Copyright (c) Facebook, Inc. and its affiliates.
 import functools
 import json
 import logging
@@ -7,11 +7,11 @@ import numpy as np
 import os
 from itertools import chain
 import pycocotools.mask as mask_util
-from fvcore.common.file_io import PathManager
 from PIL import Image
 
 from detectron2.structures import BoxMode
 from detectron2.utils.comm import get_world_size
+from detectron2.utils.file_io import PathManager
 from detectron2.utils.logger import setup_logger
 
 try:
@@ -82,7 +82,7 @@ def load_cityscapes_instances(image_dir, gt_dir, from_json=True, to_polygons=Tru
     logger.info("Loaded {} images from {}".format(len(ret), image_dir))
 
     # Map cityscape ids to contiguous ids
-    from cityscapesscripts.helpers.labels import labels
+    from deeplearning.projects.cityscapesApi.cityscapesscripts.helpers.labels import labels
 
     labels = [l for l in labels if l.hasInstances and not l.ignoreInEval]
     dataset_id_to_contiguous_id = {l.id: idx for idx, l in enumerate(labels)}
@@ -138,7 +138,7 @@ def _cityscapes_files_to_dict(files, from_json, to_polygons):
     Returns:
         A dict in Detectron2 Dataset format.
     """
-    from cityscapesscripts.helpers.labels import id2label, name2label
+    from deeplearning.projects.cityscapesApi.cityscapesscripts.helpers.labels import id2label, name2label
 
     image_file, instance_id_file, _, json_file = files
 
@@ -278,7 +278,8 @@ def _cityscapes_files_to_dict(files, from_json, to_polygons):
     return ret
 
 
-if __name__ == "__main__":
+def main() -> None:
+    global logger, labels
     """
     Test the cityscapes dataset loader.
 
@@ -293,9 +294,9 @@ if __name__ == "__main__":
     parser.add_argument("gt_dir")
     parser.add_argument("--type", choices=["instance", "semantic"], default="instance")
     args = parser.parse_args()
+    from deeplearning.projects.cityscapesApi.cityscapesscripts.helpers.labels import labels
     from detectron2.data.catalog import Metadata
     from detectron2.utils.visualizer import Visualizer
-    from cityscapesscripts.helpers.labels import labels
 
     logger = setup_logger(name=__name__)
 
@@ -315,9 +316,9 @@ if __name__ == "__main__":
         dicts = load_cityscapes_semantic(args.image_dir, args.gt_dir)
         logger.info("Done loading {} samples.".format(len(dicts)))
 
-        stuff_names = [k.name for k in labels if k.trainId != 255]
+        stuff_classes = [k.name for k in labels if k.trainId != 255]
         stuff_colors = [k.color for k in labels if k.trainId != 255]
-        meta = Metadata().set(stuff_names=stuff_names, stuff_colors=stuff_colors)
+        meta = Metadata().set(stuff_classes=stuff_classes, stuff_colors=stuff_colors)
 
     for d in dicts:
         img = np.array(Image.open(PathManager.open(d["file_name"], "rb")))
@@ -327,3 +328,7 @@ if __name__ == "__main__":
         # cv2.waitKey()
         fpath = os.path.join(dirname, os.path.basename(d["file_name"]))
         vis.save(fpath)
+
+
+if __name__ == "__main__":
+    main()  # pragma: no cover

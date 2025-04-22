@@ -1,4 +1,6 @@
-# Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
+# Copyright (c) Facebook, Inc. and its affiliates.
+
+# pyre-unsafe
 
 from .frame_selector import (
     FrameSelectionStrategy,

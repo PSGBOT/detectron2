@@ -1,4 +1,4 @@
-// Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
+// Copyright (c) Facebook, Inc. and its affiliates.
 #pragma once
 
 #include <cassert>
@@ -88,6 +88,13 @@ HOST_DEVICE_INLINE int get_intersection_points(
     vec2[i] = pts2[(i + 1) % 4] - pts2[i];
   }
 
+  // When computing the intersection area, it doesn't hurt if we have
+  // more (duplicated/approximate) intersections/vertices than needed,
+  // while it can cause drastic difference if we miss an intersection/vertex.
+  // Therefore, we add an epsilon to relax the comparisons between
+  // the float point numbers that decide the intersection points.
+  double EPS = 1e-5;
+
   // Line test - test all line combos for intersection
   int num = 0; // number of intersections
   for (int i = 0; i < 4; i++) {
@@ -105,7 +112,7 @@ HOST_DEVICE_INLINE int get_intersection_points(
       T t1 = cross_2d<T>(vec2[j], vec12) / det;
       T t2 = cross_2d<T>(vec1[i], vec12) / det;
 
-      if (t1 >= 0.0f && t1 <= 1.0f && t2 >= 0.0f && t2 <= 1.0f) {
+      if (t1 > -EPS && t1 < 1.0f + EPS && t2 > -EPS && t2 < 1.0f + EPS) {
         intersections[num++] = pts1[i] + vec1[i] * t1;
       }
     }
@@ -127,8 +134,8 @@ HOST_DEVICE_INLINE int get_intersection_points(
       auto APdotAB = dot_2d<T>(AP, AB);
       auto APdotAD = -dot_2d<T>(AP, DA);
 
-      if ((APdotAB >= 0) && (APdotAD >= 0) && (APdotAB <= ABdotAB) &&
-          (APdotAD <= ADdotAD)) {
+      if ((APdotAB > -EPS) && (APdotAD > -EPS) && (APdotAB < ABdotAB + EPS) &&
+          (APdotAD < ADdotAD + EPS)) {
         intersections[num++] = pts1[i];
       }
     }
@@ -146,8 +153,8 @@ HOST_DEVICE_INLINE int get_intersection_points(
       auto APdotAB = dot_2d<T>(AP, AB);
       auto APdotAD = -dot_2d<T>(AP, DA);
 
-      if ((APdotAB >= 0) && (APdotAD >= 0) && (APdotAB <= ABdotAB) &&
-          (APdotAD <= ADdotAD)) {
+      if ((APdotAB > -EPS) && (APdotAD > -EPS) && (APdotAB < ABdotAB + EPS) &&
+          (APdotAD < ADdotAD + EPS)) {
         intersections[num++] = pts2[i];
       }
     }
@@ -218,19 +225,40 @@ HOST_DEVICE_INLINE int convex_hull_graham(
   }
 #else
   // CPU version
-  std::sort(
-      q + 1, q + num_in, [](const Point<T>& A, const Point<T>& B) -> bool {
-        T temp = cross_2d<T>(A, B);
-        if (fabs(temp) < 1e-6) {
-          return dot_2d<T>(A, A) < dot_2d<T>(B, B);
-        } else {
-          return temp > 0;
-        }
-      });
+  // std::sort(
+  //     q + 1, q + num_in, [](const Point<T>& A, const Point<T>& B) -> bool {
+  //       T temp = cross_2d<T>(A, B);
+
+  // if (fabs(temp) < 1e-6) {
+  //   return dot_2d<T>(A, A) < dot_2d<T>(B, B);
+  // } else {
+  //   return temp > 0;
+  // }
+  // });
+  for (int i = 0; i < num_in; i++) {
+    dist[i] = dot_2d<T>(q[i], q[i]);
+  }
+
+  for (int i = 1; i < num_in - 1; i++) {
+    for (int j = i + 1; j < num_in; j++) {
+      T crossProduct = cross_2d<T>(q[i], q[j]);
+      if ((crossProduct < -1e-6) ||
+          (fabs(crossProduct) < 1e-6 && dist[i] > dist[j])) {
+        auto q_tmp = q[i];
+        q[i] = q[j];
+        q[j] = q_tmp;
+        auto dist_tmp = dist[i];
+        dist[i] = dist[j];
+        dist[j] = dist_tmp;
+      }
+    }
+  }
+
   // compute distance to origin after sort, since the points are now different.
   for (int i = 0; i < num_in; i++) {
     dist[i] = dot_2d<T>(q[i], q[i]);
   }
+
 #endif
 
   // Step 4:

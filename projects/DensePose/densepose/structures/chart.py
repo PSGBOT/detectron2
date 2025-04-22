@@ -1,4 +1,6 @@
-# Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
+# Copyright (c) Facebook, Inc. and its affiliates.
+
+# pyre-unsafe
 
 from dataclasses import dataclass
 from typing import Union
@@ -58,3 +60,13 @@ class DensePoseChartPredictorOutput:
                 u=self.u[item],
                 v=self.v[item],
             )
+
+    def to(self, device: torch.device):
+        """
+        Transfers all tensors to the given device
+        """
+        coarse_segm = self.coarse_segm.to(device)
+        fine_segm = self.fine_segm.to(device)
+        u = self.u.to(device)
+        v = self.v.to(device)
+        return DensePoseChartPredictorOutput(coarse_segm=coarse_segm, fine_segm=fine_segm, u=u, v=v)

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
+# Copyright (c) Facebook, Inc. and its affiliates.
 
 import numpy as np
 import os
@@ -26,7 +26,7 @@ class TestVisualizer(unittest.TestCase):
 
         polygons = [[_rand_poly() for _ in range(np.random.randint(1, 5))] for _ in range(N)]
 
-        mask = np.zeros_like(img[:, :, 0], dtype=np.bool)
+        mask = np.zeros_like(img[:, :, 0], dtype=bool)
         mask[:40, 10:20] = 1
 
         labels = [str(i) for i in range(N)]
@@ -54,6 +54,33 @@ class TestVisualizer(unittest.TestCase):
                         "counts": "_jh52m?2N2N2N2O100O10O001N1O2MceP2",
                         "size": [512, 512],
                     },
+                }
+            ],
+            "height": 512,
+            "image_id": 1,
+            "width": 512,
+        }
+        v = Visualizer(img)
+        v.draw_dataset_dict(dic)
+
+        v = Visualizer(img, self.metadata)
+        v.draw_dataset_dict(dic)
+
+    def test_draw_rotated_dataset_dict(self):
+        img = np.random.rand(512, 512, 3) * 255
+        dic = {
+            "annotations": [
+                {
+                    "bbox": [
+                        368.9946492271106,
+                        330.891438763377,
+                        13.148537455410235,
+                        13.644708680142685,
+                        45.0,
+                    ],
+                    "bbox_mode": BoxMode.XYWHA_ABS,
+                    "category_id": 0,
+                    "iscrowd": 1,
                 }
             ],
             "height": 512,
@@ -94,6 +121,9 @@ class TestVisualizer(unittest.TestCase):
         inst.pred_boxes = torch.from_numpy(boxes)
         inst.pred_masks = torch.from_numpy(np.asarray(masks))
 
+        v = Visualizer(img)
+        v.draw_instance_predictions(inst)
+
         v = Visualizer(img, self.metadata)
         v.draw_instance_predictions(inst)
 
@@ -107,6 +137,13 @@ class TestVisualizer(unittest.TestCase):
 
         v = Visualizer(img, self.metadata, instance_mode=ColorMode.IMAGE_BW)
         v.draw_instance_predictions(inst)
+
+        # check that output is grayscale
+        inst = inst[:0]
+        v = Visualizer(img, self.metadata, instance_mode=ColorMode.IMAGE_BW)
+        output = v.draw_instance_predictions(inst).get_image()
+        self.assertTrue(np.allclose(output[:, :, 0], output[:, :, 1]))
+        self.assertTrue(np.allclose(output[:, :, 0], output[:, :, 2]))
 
     def test_draw_empty_mask_predictions(self):
         img, boxes, _, _, masks = self._random_data()
@@ -175,6 +212,24 @@ class TestVisualizer(unittest.TestCase):
                     o = o.get_image().astype("float32")
                     # red color is drawn on the image
                 self.assertTrue(o[:, :, 0].sum() > 0)
+
+    def test_draw_soft_mask(self):
+        img = np.random.rand(100, 100, 3) * 255
+        img[:, :, 0] = 0  # remove red color
+        mask = np.zeros((100, 100), dtype=np.float32)
+        mask[30:50, 40:50] = 1.0
+        cv2.GaussianBlur(mask, (21, 21), 10)
+
+        v = Visualizer(img)
+        o = v.draw_soft_mask(mask, color="red", text="test")
+        o = o.get_image().astype("float32")
+        # red color is drawn on the image
+        self.assertTrue(o[:, :, 0].sum() > 0)
+
+        # test draw empty mask
+        v = Visualizer(img)
+        o = v.draw_soft_mask(np.zeros((100, 100), dtype=np.float32), color="red", text="test")
+        o = o.get_image().astype("float32")
 
     def test_border_mask_with_holes(self):
         H, W = 200, 200
